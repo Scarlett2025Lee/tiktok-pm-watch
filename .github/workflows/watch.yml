@@ -1,0 +1,43 @@
+name: TikTok PM watch
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # every 5 minutes (GitHub's minimum; runs can start a few minutes late)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # commit seen.json
+  issues: write # open the alert issue
+
+concurrency:
+  group: tiktok-pm-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      ALERT_TO: ${{ secrets.ALERT_TO }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install mail library (only used when Gmail secrets are set)
+        if: ${{ env.GMAIL_USER != '' }}
+        run: npm install --no-save nodemailer@6.9.16
+      - name: Check for new roles
+        run: node watch.mjs
+      - name: Save seen roles
+        run: |
+          if ! git diff --quiet -- seen.json || ! git ls-files --error-unmatch seen.json >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+            git add seen.json
+            git commit -m "Update seen roles"
+            git push
+          fi
